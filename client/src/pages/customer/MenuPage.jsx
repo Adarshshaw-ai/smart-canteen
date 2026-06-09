@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
+import { useSocket } from "../../context/SocketContext";
 
 const FOOD_ICONS = {
   "South Indian": "🥘",
@@ -23,12 +24,36 @@ export default function MenuPage() {
   const [search, setSearch] = useState("");
   const [orderModal, setOrderModal] = useState(false);
   const [orderResult, setOrderResult] = useState(null);
+  const [pendingOrder, setPendingOrder] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(0);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [tableNum, setTableNum] = useState(tableNumber);
   const [loading, setLoading] = useState(true);
   const [paymentMethods, setPaymentMethods] = useState(["cash"]);
   const [selectedMethod, setSelectedMethod] = useState("cash");
+  const socket = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+    socket.on("order-cancelled", (order) => {
+      if (pendingOrder && pendingOrder.id === order.id) {
+        setPendingOrder(null);
+        toast.error("Order expired due to non-payment", { duration: 6000 });
+      }
+    });
+    return () => socket.off("order-cancelled");
+  }, [socket, pendingOrder]);
+
+  useEffect(() => {
+    let timer;
+    if (pendingOrder && timeLeft > 0) {
+      timer = setInterval(() => setTimeLeft((t) => t - 1), 1000);
+    } else if (timeLeft === 0 && pendingOrder) {
+      setPendingOrder(null);
+    }
+    return () => clearInterval(timer);
+  }, [pendingOrder, timeLeft]);
 
   useEffect(() => {
     fetch("/api/menu/available")
@@ -99,6 +124,8 @@ export default function MenuPage() {
       if (!res.ok) throw new Error(data.error);
 
       if (selectedMethod === "Razorpay") {
+        setPendingOrder(data);
+        setTimeLeft(300); // 5 minutes
         await handleRazorpayPayment(data);
       } else {
         setOrderResult(data);
@@ -143,6 +170,7 @@ export default function MenuPage() {
           const verifyData = await verifyRes.json();
           if (verifyData.status === "ok") {
             setOrderResult(order);
+            setPendingOrder(null);
             setCart([]);
             setCartOpen(false);
             setOrderModal(false);
@@ -513,6 +541,55 @@ export default function MenuPage() {
               onClick={() => setOrderResult(null)}
             >
               Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Payment Modal */}
+      {pendingOrder && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ textAlign: "center" }}>
+            <div className="spinner" style={{ margin: "0 auto 20px" }} />
+            <h2>⏳ Waiting for Payment</h2>
+            <p style={{ color: "var(--text-secondary)", marginBottom: 20 }}>
+              Please complete the payment in the Razorpay window
+            </p>
+            <div
+              style={{
+                background: "var(--bg-secondary)",
+                borderRadius: "var(--radius)",
+                padding: 16,
+                marginBottom: 20,
+              }}
+            >
+              <div style={{ fontSize: ".85rem", color: "var(--text-muted)" }}>
+                Expires in
+              </div>
+              <div
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: 700,
+                  color: timeLeft < 60 ? "var(--danger)" : "var(--accent)",
+                }}
+              >
+                {Math.floor(timeLeft / 60)}:
+                {String(timeLeft % 60).padStart(2, "0")}
+              </div>
+            </div>
+            <button
+              className="btn btn-primary"
+              style={{ width: "100%", justifyContent: "center" }}
+              onClick={() => handleRazorpayPayment(pendingOrder)}
+            >
+              Retry Payment 💳
+            </button>
+            <button
+              className="btn btn-secondary"
+              style={{ width: "100%", justifyContent: "center", marginTop: 12 }}
+              onClick={() => setPendingOrder(null)}
+            >
+              Close Window
             </button>
           </div>
         </div>

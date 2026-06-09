@@ -69,7 +69,9 @@ export default function PaymentManagement() {
           <Link to="/admin/qr" className="nav-link">QR Codes</Link>
           <Link to="/admin/orders" className="nav-link">Orders</Link>
           <Link to="/admin/reports" className="nav-link">Reports</Link>
+          <Link to="/admin/staff" className="nav-link">Staff</Link>
           <Link to="/admin/payments" className="nav-link active">Payments</Link>
+          <Link to="/admin/profile" className="nav-link">Profile</Link>
           <button className="btn btn-sm btn-secondary" onClick={handleLogout}>Logout</button>
         </div>
       </div>

@@ -58,6 +58,13 @@ router.post('/create-razorpay-order', async (req, res) => {
     };
 
     const order = await razorpay.orders.create(options);
+
+    // Save Razorpay order ID to internal order for webhook matching
+    await db.query(
+      "UPDATE orders SET payment_details = payment_details || $1::jsonb WHERE id = $2",
+      [JSON.stringify({ razorpay_order_id: order.id }), order_id]
+    );
+
     res.json({ ...order, key_id });
   } catch (e) {
     console.error(e);
@@ -77,10 +84,18 @@ router.post('/verify-razorpay', async (req, res) => {
     const expectedSignature = crypto.createHmac('sha256', key_secret).update(body.toString()).digest('hex');
 
     if (expectedSignature === razorpay_signature) {
-      await db.query(
-        'UPDATE orders SET payment_status = $1, payment_id = $2, payment_details = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4',
+      const updateResult = await db.query(
+        'UPDATE orders SET payment_status = $1, payment_id = $2, payment_details = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 RETURNING *',
         ['paid', razorpay_payment_id, JSON.stringify(req.body), internal_order_id]
       );
+      const order = updateResult.rows[0];
+
+      // Emit to kitchen now that it's paid
+      if (req.app.get('io')) {
+        const oisResult = await db.query('SELECT * FROM order_items WHERE order_id=$1', [order.id]);
+        req.app.get('io').emit('new-order', { ...order, items: oisResult.rows });
+      }
+
       res.json({ status: 'ok' });
     } else {
       res.status(400).json({ error: 'Invalid signature' });
@@ -88,6 +103,48 @@ router.post('/verify-razorpay', async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+// Razorpay Webhook
+router.post('/webhook', async (req, res) => {
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET || 'canteen_secret';
+  const signature = req.headers['x-razorpay-signature'];
+
+  const shasum = crypto.createHmac('sha256', secret);
+  shasum.update(JSON.stringify(req.body));
+  const digest = shasum.digest('hex');
+
+  if (signature === digest) {
+    const event = req.body.event;
+    if (event === 'payment.captured' || event === 'order.paid') {
+      const payload = req.body.payload.payment ? req.body.payload.payment.entity : req.body.payload.order.entity;
+      const razorpayOrderId = payload.order_id;
+      
+      // Find order by razorpay_order_id in payment_details JSONB
+      const orderResult = await db.query(
+        "SELECT * FROM orders WHERE payment_details->>'razorpay_order_id' = $1 OR payment_details->>'id' = $1", 
+        [razorpayOrderId]
+      );
+      const order = orderResult.rows[0];
+
+      if (order && order.payment_status !== 'paid') {
+        const updateResult = await db.query(
+          'UPDATE orders SET payment_status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+          ['paid', order.id]
+        );
+        const updatedOrder = updateResult.rows[0];
+
+        // Emit to kitchen
+        if (req.app.get('io')) {
+          const oisResult = await db.query('SELECT * FROM order_items WHERE order_id=$1', [updatedOrder.id]);
+          req.app.get('io').emit('new-order', { ...updatedOrder, items: oisResult.rows });
+        }
+      }
+    }
+    res.json({ status: 'ok' });
+  } else {
+    res.status(400).send('Invalid signature');
   }
 });
 

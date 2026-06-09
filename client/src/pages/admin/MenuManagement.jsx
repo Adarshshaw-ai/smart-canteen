@@ -16,6 +16,8 @@ export default function MenuManagement() {
     price: "",
     category: "",
     prep_time: "10",
+    stock_quantity: "100",
+    station: "Main Kitchen",
     image_url: "",
   });
   const [imagePreview, setImagePreview] = useState(null);
@@ -42,6 +44,8 @@ export default function MenuManagement() {
       price: "",
       category: "",
       prep_time: "10",
+      stock_quantity: "100",
+      station: "Main Kitchen",
       image_url: "",
     });
     setImagePreview(null);
@@ -53,6 +57,10 @@ export default function MenuManagement() {
       name: item.name,
       description: item.description,
       price: String(item.price),
+      category: item.category,
+      prep_time: String(item.prep_time),
+      stock_quantity: String(item.stock_quantity),
+      station: item.station || "Main Kitchen",
       image_url: item.image_url || "",
     });
     setImagePreview(item.image_url || null);
@@ -85,6 +93,7 @@ export default function MenuManagement() {
         ...form,
         price: parseFloat(form.price),
         prep_time: parseInt(form.prep_time),
+        stock_quantity: parseInt(form.stock_quantity),
         available: editing ? editing.available : true,
       };
       const url = editing ? `/api/menu/${editing.id}` : "/api/menu";
@@ -102,7 +111,8 @@ export default function MenuManagement() {
   const handleDelete = async (id) => {
     if (!confirm("Delete this item?")) return;
     try {
-      await authFetch(`/api/menu/${id}`, { method: "DELETE" });
+      const res = await authFetch(`/api/menu/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
       toast.success("Deleted");
       fetchItems();
     } catch {
@@ -112,7 +122,8 @@ export default function MenuManagement() {
 
   const handleToggle = async (id) => {
     try {
-      await authFetch(`/api/menu/${id}/toggle`, { method: "PATCH" });
+      const res = await authFetch(`/api/menu/${id}/toggle`, { method: "PATCH" });
+      if (!res.ok) throw new Error("Failed to toggle");
       fetchItems();
     } catch {
       toast.error("Failed");
@@ -143,8 +154,14 @@ export default function MenuManagement() {
           <Link to="/admin/reports" className="nav-link">
             Reports
           </Link>
+          <Link to="/admin/staff" className="nav-link">
+            Staff
+          </Link>
           <Link to="/admin/payments" className="nav-link">
             Payments
+          </Link>
+          <Link to="/admin/profile" className="nav-link">
+            Profile
           </Link>
           <button className="btn btn-sm btn-secondary" onClick={handleLogout}>
             Logout
@@ -179,6 +196,8 @@ export default function MenuManagement() {
                   <th>Category</th>
                   <th>Price</th>
                   <th>Prep Time</th>
+                  <th>Stock</th>
+                  <th>Station</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -203,6 +222,10 @@ export default function MenuManagement() {
                       ₹{item.price}
                     </td>
                     <td>{item.prep_time}m</td>
+                    <td style={{ fontWeight: 600, color: item.stock_quantity < 10 ? 'var(--danger)' : 'inherit' }}>
+                      {item.stock_quantity}
+                    </td>
+                    <td style={{ fontSize: '.85rem' }}>{item.station}</td>
                     <td>
                       <span
                         className={`badge ${item.available ? "badge-ready" : "badge-cancelled"}`}
@@ -290,6 +313,17 @@ export default function MenuManagement() {
                   }
                 />
               </div>
+              <div className="input-group">
+                <label>Stock Quantity</label>
+                <input
+                  className="input"
+                  type="number"
+                  value={form.stock_quantity}
+                  onChange={(e) =>
+                    setForm({ ...form, stock_quantity: e.target.value })
+                  }
+                />
+              </div>
             </div>
             <div className="input-group">
               <label>Category *</label>
@@ -298,6 +332,15 @@ export default function MenuManagement() {
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
                 placeholder="e.g. South Indian, Snacks"
+              />
+            </div>
+            <div className="input-group">
+              <label>Kitchen Station *</label>
+              <input
+                className="input"
+                value={form.station}
+                onChange={(e) => setForm({ ...form, station: e.target.value })}
+                placeholder="e.g. Grill, Beverages, Fryer"
               />
             </div>
             <div className="input-group">

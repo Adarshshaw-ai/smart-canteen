@@ -39,9 +39,15 @@ async function initializeDatabase() {
         image_url TEXT DEFAULT '',
         available INTEGER DEFAULT 1,
         prep_time INTEGER DEFAULT 10,
+        stock_quantity INTEGER DEFAULT 100,
+        station VARCHAR(100) DEFAULT 'Main Kitchen',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Ensure columns exist for existing databases
+    await pool.query("ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS stock_quantity INTEGER DEFAULT 100");
+    await pool.query("ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS station VARCHAR(100) DEFAULT 'Main Kitchen'");
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS orders (
@@ -55,11 +61,17 @@ async function initializeDatabase() {
         payment_method VARCHAR(50) DEFAULT 'cash',
         payment_status VARCHAR(50) DEFAULT 'pending',
         payment_id VARCHAR(255),
-        payment_details JSONB,
+        payment_details JSONB DEFAULT '{}',
+        expires_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP");
+    await pool.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_details JSONB DEFAULT '{}'");
+    await pool.query("ALTER TABLE orders ALTER COLUMN payment_details SET DEFAULT '{}'");
+    await pool.query("UPDATE orders SET payment_details = '{}' WHERE payment_details IS NULL");
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS payment_configs (
@@ -94,51 +106,47 @@ async function initializeDatabase() {
     `);
 
     // Seed defaults
-    const adminExists = await pool.query('SELECT id FROM users WHERE role = $1', ['admin']);
-    if (adminExists.rows.length === 0) {
-      await pool.query(
-        'INSERT INTO users (username, password, role, name) VALUES ($1, $2, $3, $4)',
-        ['admin', bcrypt.hashSync('admin123', 10), 'admin', 'Administrator']
-      );
-      await pool.query(
-        'INSERT INTO users (username, password, role, name) VALUES ($1, $2, $3, $4)',
-        ['kitchen', bcrypt.hashSync('kitchen123', 10), 'kitchen', 'Kitchen Staff']
-      );
-      await pool.query(
-        'INSERT INTO users (username, password, role, name) VALUES ($1, $2, $3, $4)',
-        ['counter', bcrypt.hashSync('counter123', 10), 'counter', 'Counter Staff']
-      );
-
-      const items = [
-        ['Masala Dosa','Crispy dosa with potato masala',60,'South Indian',8],
-        ['Idli Sambar','Steamed idlis with sambar & chutney',40,'South Indian',5],
-        ['Paneer Butter Masala','Rich paneer in creamy tomato gravy',120,'North Indian',15],
-        ['Veg Biryani','Fragrant basmati rice with mixed vegetables',100,'Rice',12],
-        ['Chicken Biryani','Aromatic rice with tender chicken pieces',150,'Rice',15],
-        ['Samosa (2 pcs)','Crispy pastry with spiced potato filling',20,'Snacks',3],
-        ['Vada Pav','Spicy potato fritter in a bun',25,'Snacks',4],
-        ['Chole Bhature','Spicy chickpeas with fried bread',80,'North Indian',10],
-        ['Chai','Hot Indian masala tea',15,'Beverages',3],
-        ['Cold Coffee','Chilled coffee with ice cream',50,'Beverages',5],
-        ['Fresh Lime Soda','Refreshing lemon soda',30,'Beverages',3],
-        ['Naan','Soft tandoori bread',30,'Breads',5],
-        ['Aloo Paratha','Stuffed potato flatbread with butter',50,'Breads',8],
-        ['Gulab Jamun (2 pcs)','Sweet milk dumplings in sugar syrup',40,'Desserts',2],
-        ['Rasgulla (2 pcs)','Soft cottage cheese balls in syrup',35,'Desserts',2],
-      ];
-
-      for (const item of items) {
-        await pool.query(
-          'INSERT INTO menu_items (name, description, price, category, prep_time) VALUES ($1, $2, $3, $4, $5)',
-          item
-        );
+    const anyUserExists = await pool.query('SELECT id FROM users LIMIT 1');
+    if (anyUserExists.rows.length === 0) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('ℹ️ No users found. Setup required.');
       }
+      
+      const itemsCount = await pool.query('SELECT COUNT(*) as c FROM menu_items');
+      if (parseInt(itemsCount.rows[0].c) === 0) {
+        const items = [
+          ['Masala Dosa','Crispy dosa with potato masala',60,'South Indian',8,'Grill'],
+          ['Idli Sambar','Steamed idlis with sambar & chutney',40,'South Indian',5,'Steam'],
+          ['Paneer Butter Masala','Rich paneer in creamy tomato gravy',120,'North Indian',15,'Main Course'],
+          ['Veg Biryani','Fragrant basmati rice with mixed vegetables',100,'Rice',12,'Main Course'],
+          ['Chicken Biryani','Aromatic rice with tender chicken pieces',150,'Rice',15,'Main Course'],
+          ['Samosa (2 pcs)','Crispy pastry with spiced potato filling',20,'Snacks',3,'Fryer'],
+          ['Vada Pav','Spicy potato fritter in a bun',25,'Snacks',4,'Snacks'],
+          ['Chole Bhature','Spicy chickpeas with fried bread',80,'North Indian',10,'Fryer'],
+          ['Chai','Hot Indian masala tea',15,'Beverages',3,'Beverages'],
+          ['Cold Coffee','Chilled coffee with ice cream',50,'Beverages',5,'Beverages'],
+          ['Fresh Lime Soda','Refreshing lemon soda',30,'Beverages',3,'Beverages'],
+          ['Naan','Soft tandoori bread',30,'Breads',5,'Tandoor'],
+          ['Aloo Paratha','Stuffed potato flatbread with butter',50,'Breads',8,'Grill'],
+          ['Gulab Jamun (2 pcs)','Sweet milk dumplings in sugar syrup',40,'Desserts',2,'Desserts'],
+          ['Rasgulla (2 pcs)','Soft cottage cheese balls in syrup',35,'Desserts',2,'Desserts'],
+        ];
 
-      for (let i = 1; i <= 10; i++) {
-        await pool.query('INSERT INTO tables_config (table_number) VALUES ($1)', [i]);
+        for (const item of items) {
+          await pool.query(
+            'INSERT INTO menu_items (name, description, price, category, prep_time, station) VALUES ($1, $2, $3, $4, $5, $6)',
+            item
+          );
+        }
+
+        for (let i = 1; i <= 10; i++) {
+          await pool.query('INSERT INTO tables_config (table_number) VALUES ($1)', [i]);
+        }
+        
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('✅ Database seeded with default menu items');
+        }
       }
-
-      console.log('✅ Database seeded with default data');
     }
   } catch (err) {
     console.error('Database initialization error:', err);

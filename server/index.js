@@ -13,6 +13,7 @@ const menuRoutes = require('./routes/menu');
 const orderRoutes = require('./routes/orders');
 const adminRoutes = require('./routes/admin');
 const paymentRoutes = require('./routes/payments');
+const startCleanupJob = require('./jobs/cleanup');
 
 const app = express();
 const server = http.createServer(app);
@@ -42,11 +43,28 @@ app.use('/api/payments', paymentRoutes);
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
 // Socket.io
 io.on('connection', (socket) => {
-  console.log(`🔌 Client connected: ${socket.id}`);
-  socket.on('join-room', (room) => { socket.join(room); console.log(`📢 ${socket.id} joined ${room}`); });
-  socket.on('disconnect', () => console.log(`❌ Client disconnected: ${socket.id}`));
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`🔌 Client connected: ${socket.id}`);
+  }
+  socket.on('join-room', (room) => { 
+    socket.join(room); 
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`📢 ${socket.id} joined ${room}`); 
+    }
+  });
+  socket.on('disconnect', () => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`❌ Client disconnected: ${socket.id}`);
+    }
+  });
 });
 
 // Serve static frontend in production
@@ -59,10 +77,9 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`\n🍽️  Smart Canteen Server running on http://localhost:${PORT}`);
   console.log(`📡 Socket.io ready`);
-  console.log(`\n📋 Default credentials:`);
-  console.log(`   Admin:   admin / admin123`);
-  console.log(`   Kitchen: kitchen / kitchen123`);
-  console.log(`   Counter: counter / counter123\n`);
+  
+  // Start background jobs
+  startCleanupJob(io);
 }).on('error', (err) => {
   console.error('❌ Server error:', err.message);
   if (err.code === 'EADDRINUSE') {

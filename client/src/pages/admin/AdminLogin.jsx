@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
@@ -9,6 +9,21 @@ export default function AdminLogin() {
   const [loading, setLoading] = useState(false);
   const { login, user } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkSetup = async () => {
+      try {
+        const res = await fetch("/api/auth/setup-status");
+        const data = await res.json();
+        if (data.needsSetup) {
+          navigate("/admin/setup");
+        }
+      } catch (err) {
+        console.error("Setup check failed", err);
+      }
+    };
+    checkSetup();
+  }, [navigate]);
 
   if (user && user.role === "admin") {
     navigate("/admin/menu");
@@ -42,9 +57,9 @@ export default function AdminLogin() {
         <div className="navbar-links">
           <button
             className="btn btn-sm btn-secondary"
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/menu")}
           >
-            ← Back to Home
+            ← Back to Menu
           </button>
         </div>
       </div>

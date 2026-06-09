@@ -16,49 +16,72 @@ router.post('/', async (req, res) => {
   const { table_number, customer_name, customer_phone, items, payment_method } = req.body;
   if (!items || items.length === 0) return res.status(400).json({ error: 'Order must have items' });
 
+  const client = await db.connect();
   try {
+    await client.query('BEGIN');
+
     let total = 0;
     const orderItems = [];
     for (const item of items) {
-      const result = await db.query('SELECT * FROM menu_items WHERE id=$1 AND available=1', [item.id]);
+      // Lock row for stock update
+      const result = await client.query('SELECT * FROM menu_items WHERE id=$1 AND available=1 FOR UPDATE', [item.id]);
       const mi = result.rows[0];
-      if (!mi) return res.status(400).json({ error: `Item #${item.id} unavailable` });
+      if (!mi) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Item "${item.name || item.id}" unavailable` });
+      }
+      if (mi.stock_quantity < item.quantity) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Insufficient stock for ${mi.name}` });
+      }
+
       total += mi.price * item.quantity;
       orderItems.push({ menu_item_id: mi.id, item_name: mi.name, quantity: item.quantity, price: mi.price });
+
+      // Reserve stock
+      await client.query('UPDATE menu_items SET stock_quantity = stock_quantity - $1 WHERE id = $2', [item.quantity, mi.id]);
     }
 
     let tkn = generateToken();
-    let existing = await db.query('SELECT id FROM orders WHERE token_number=$1', [tkn]);
+    let existing = await client.query('SELECT id FROM orders WHERE token_number=$1', [tkn]);
     while (existing.rows.length > 0) {
       tkn = generateToken();
-      existing = await db.query('SELECT id FROM orders WHERE token_number=$1', [tkn]);
+      existing = await client.query('SELECT id FROM orders WHERE token_number=$1', [tkn]);
     }
 
-    const orderResult = await db.query(
-      'INSERT INTO orders (token_number,table_number,customer_name,customer_phone,total_amount,payment_method) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-      [tkn, table_number||null, customer_name||'Guest', customer_phone||'', total, payment_method||'cash']
+    // Set expiration for digital payments (5 minutes)
+    const expiresAt = payment_method === 'Razorpay' ? new Date(Date.now() + 5 * 60000) : null;
+
+    const orderResult = await client.query(
+      'INSERT INTO orders (token_number,table_number,customer_name,customer_phone,total_amount,payment_method,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+      [tkn, table_number||null, customer_name||'Guest', customer_phone||'', total, payment_method||'cash', expiresAt]
     );
     const order = orderResult.rows[0];
 
     for (const oi of orderItems) {
-      await db.query(
+      await client.query(
         'INSERT INTO order_items (order_id,menu_item_id,item_name,quantity,price) VALUES ($1,$2,$3,$4,$5)',
         [order.id, oi.menu_item_id, oi.item_name, oi.quantity, oi.price]
       );
     }
 
+    await client.query('COMMIT');
+
     const oisResult = await db.query('SELECT * FROM order_items WHERE order_id=$1', [order.id]);
     const result = { ...order, items: oisResult.rows };
 
-    // Emit via socket (attached in index.js)
-    if (req.app.get('io')) {
+    // Emit via socket ONLY if it's not an unpaid digital order
+    if (req.app.get('io') && payment_method !== 'Razorpay') {
       req.app.get('io').emit('new-order', result);
     }
 
     res.status(201).json(result);
   } catch(e) {
+    await client.query('ROLLBACK');
     console.error(e);
     res.status(500).json({ error: 'Failed to place order' });
+  } finally {
+    client.release();
   }
 });
 

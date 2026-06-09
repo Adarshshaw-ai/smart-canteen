@@ -119,4 +119,63 @@ router.get('/users', authenticateToken, authorizeRole('admin'), async (req, res)
   } catch(e) { res.status(500).json({ error: 'Failed to fetch users' }); }
 });
 
+router.patch('/profile', authenticateToken, async (req, res) => {
+  const { username, password, name } = req.body;
+  const userId = req.user.id;
+  try {
+    const bcrypt = require('bcryptjs');
+    let query = 'UPDATE users SET ';
+    const params = [];
+    let setClauses = [];
+
+    if (username) {
+      setClauses.push(`username = $${params.length + 1}`);
+      params.push(username);
+    }
+    if (name) {
+      setClauses.push(`name = $${params.length + 1}`);
+      params.push(name);
+    }
+    if (password) {
+      const hashedPassword = bcrypt.hashSync(password, 10);
+      setClauses.push(`password = $${params.length + 1}`);
+      params.push(hashedPassword);
+    }
+
+    if (setClauses.length === 0) return res.status(400).json({ error: 'No fields to update' });
+
+    query += setClauses.join(', ') + ` WHERE id = $${params.length + 1} RETURNING id, username, role, name`;
+    params.push(userId);
+
+    const r = await db.query(query, params);
+    res.json(r.rows[0]);
+  } catch(e) {
+    if (e.code === '23505') return res.status(400).json({ error: 'Username already exists' });
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+router.post('/users', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  const { username, password, role, name } = req.body;
+  if (!username || !password || !role || !name) return res.status(400).json({ error: 'All fields required' });
+  try {
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    const r = await db.query(
+      'INSERT INTO users (username, password, role, name) VALUES ($1, $2, $3, $4) RETURNING id, username, role, name',
+      [username, hashedPassword, role, name]
+    );
+    res.status(201).json(r.rows[0]);
+  } catch(e) { res.status(400).json({ error: 'Username already exists' }); }
+});
+
+router.delete('/users/:id', authenticateToken, authorizeRole('admin'), async (req, res) => {
+  try {
+    // Prevent self-deletion
+    if (req.user.id === parseInt(req.params.id)) return res.status(400).json({ error: 'Cannot delete yourself' });
+    await db.query('DELETE FROM users WHERE id=$1', [req.params.id]);
+    res.json({ message: 'User deleted' });
+  } catch(e) { res.status(500).json({ error: 'Failed to delete user' }); }
+});
+
 module.exports = router;

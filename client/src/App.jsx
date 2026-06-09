@@ -2,16 +2,18 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { SocketProvider } from "./context/SocketContext";
 import { useAuth } from "./context/AuthContext";
-import HomePage from "./pages/customer/HomePage";
 import MenuPage from "./pages/customer/MenuPage";
 import KitchenLogin from "./pages/kitchen/KitchenLogin";
 import KitchenDashboard from "./pages/kitchen/KitchenDashboard";
 import AdminLogin from "./pages/admin/AdminLogin";
+import Setup from "./pages/admin/Setup";
 import MenuManagement from "./pages/admin/MenuManagement";
 import QRGenerator from "./pages/admin/QRGenerator";
 import OrderHistory from "./pages/admin/OrderHistory";
 import Reports from "./pages/admin/Reports";
+import StaffManagement from "./pages/admin/StaffManagement";
 import PaymentManagement from "./pages/admin/PaymentManagement";
+import AdminProfile from "./pages/admin/AdminProfile";
 import CounterLogin from "./pages/counter/CounterLogin";
 import CounterDashboard from "./pages/counter/CounterDashboard";
 import OrderVerification from "./pages/counter/OrderVerification";
@@ -44,7 +46,7 @@ export default function App() {
       />
       <Routes>
         {/* Customer */}
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<Navigate to="/menu" />} />
         <Route path="/menu" element={<MenuPage />} />
 
         {/* Kitchen */}
@@ -59,6 +61,7 @@ export default function App() {
         />
 
         {/* Admin */}
+        <Route path="/admin/setup" element={<Setup />} />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route
           path="/admin/menu"
@@ -93,10 +96,26 @@ export default function App() {
           }
         />
         <Route
+          path="/admin/staff"
+          element={
+            <ProtectedRoute role="admin">
+              <StaffManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/admin/payments"
           element={
             <ProtectedRoute role="admin">
               <PaymentManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/profile"
+          element={
+            <ProtectedRoute role="admin">
+              <AdminProfile />
             </ProtectedRoute>
           }
         />

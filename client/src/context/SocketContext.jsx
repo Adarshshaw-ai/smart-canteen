@@ -8,8 +8,6 @@ export function SocketProvider({ children }) {
 
   useEffect(() => {
     const s = io(window.location.origin, { transports: ['websocket', 'polling'] });
-    s.on('connect', () => console.log('🔌 Socket connected'));
-    s.on('disconnect', () => console.log('❌ Socket disconnected'));
     setSocket(s);
     return () => s.disconnect();
   }, []);

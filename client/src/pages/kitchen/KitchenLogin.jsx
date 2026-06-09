@@ -42,9 +42,9 @@ export default function KitchenLogin() {
         <div className="navbar-links">
           <button
             className="btn btn-sm btn-secondary"
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/menu")}
           >
-            ← Back to Home
+            ← Back to Menu
           </button>
         </div>
       </div>
