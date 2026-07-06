@@ -46,7 +46,7 @@ export default function OrderVerification() {
       <div className="navbar">
         <div className="navbar-brand"><span className="icon">🧾</span> Counter Dashboard</div>
         <div className="navbar-links">
-          <Link to="/counter" className="nav-link">Ready Orders</Link>
+          <Link to="/counter" className="nav-link">Active Orders</Link>
           <Link to="/counter/verify" className="nav-link active">Verify Order</Link>
           <button className="btn btn-sm btn-secondary" onClick={handleLogout}>Logout</button>
         </div>

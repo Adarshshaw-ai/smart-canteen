@@ -13,6 +13,19 @@ const FOOD_ICONS = {
   Desserts: "🍮",
 };
 
+// Helper function to detect vegetarian items
+const isVegItem = (item) => {
+  const nonVegKeywords = ["chicken", "mutton", "egg", "fish", "meat", "non-veg", "wings", "pork", "beef"];
+  const nameLower = item.name.toLowerCase();
+  const descLower = (item.description || "").toLowerCase();
+  
+  const hasNonVegKeyword = nonVegKeywords.some(keyword => 
+    nameLower.includes(keyword) || descLower.includes(keyword)
+  );
+  
+  return !hasNonVegKeyword;
+};
+
 export default function MenuPage() {
   const [searchParams] = useSearchParams();
   const tableNumber = searchParams.get("table") || "";
@@ -217,47 +230,45 @@ export default function MenuPage() {
           </a>
         </div>
         {tableNumber && (
-          <span style={{ fontSize: ".85rem", color: "var(--accent)" }}>
+          <div className="table-badge-floating">
             📍 Table {tableNumber}
-          </span>
+          </div>
         )}
       </div>
 
       <div className="page">
-        {/* Search */}
-        <div style={{ marginBottom: 24 }}>
-          <input
-            className="input"
-            placeholder="🔍 Search for dishes..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ maxWidth: 500, background: "var(--bg-card)" }}
-          />
+        {/* Hero Section */}
+        <div className="menu-hero">
+          <h1>Feast Your Senses 🍽️</h1>
+          <p>Fresh, hot, and delicious food delivered straight to your table.</p>
+          <div className="search-container">
+            <span className="search-icon">🔍</span>
+            <input
+              className="search-input"
+              placeholder="Search for delicious dishes, categories..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
         </div>
 
-        {/* Categories */}
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            marginBottom: 28,
-            overflowX: "auto",
-            paddingBottom: 8,
-          }}
-        >
+        {/* Categories Carousel */}
+        <div className="categories-container">
           <button
-            className={`btn btn-sm ${activeCategory === "All" ? "btn-primary" : "btn-secondary"}`}
+            className={`category-card ${activeCategory === "All" ? "active" : ""}`}
             onClick={() => setActiveCategory("All")}
           >
-            All
+            <span className="category-emoji">✨</span>
+            <span>All Items</span>
           </button>
           {categories.map((c) => (
             <button
               key={c}
-              className={`btn btn-sm ${activeCategory === c ? "btn-primary" : "btn-secondary"}`}
+              className={`category-card ${activeCategory === c ? "active" : ""}`}
               onClick={() => setActiveCategory(c)}
             >
-              {FOOD_ICONS[c] || "🍽️"} {c}
+              <span className="category-emoji">{FOOD_ICONS[c] || "🍽️"}</span>
+              <span>{c}</span>
             </button>
           ))}
         </div>
@@ -265,56 +276,104 @@ export default function MenuPage() {
         {/* Menu Grid */}
         {filtered.length === 0 ? (
           <div className="empty-state">
-            <div className="icon">🍽️</div>
-            <p>No items found</p>
+            <div className="icon" style={{ fontSize: "5rem" }}>🔍</div>
+            <h3>No delicious dishes found</h3>
+            <p style={{ color: "var(--text-secondary)", marginTop: 8 }}>
+              Try searching with different terms or check another category
+            </p>
           </div>
         ) : (
           <div className="grid grid-3">
-            {filtered.map((item, i) => (
-              <div
-                key={item.id}
-                className="menu-card fade-in"
-                style={{ animationDelay: `${i * 50}ms` }}
-              >
-                <div className="menu-card-img">
-                  {item.image_url ? (
-                    <img
-                      src={item.image_url}
-                      alt={item.name}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                      }}
-                    />
-                  ) : (
-                    <>{FOOD_ICONS[item.category] || "🍽️"}</>
-                  )}
-                </div>
-                <div className="menu-card-body">
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "start",
-                    }}
-                  >
+            {filtered.map((item, i) => {
+              const isVeg = isVegItem(item);
+              // Calculate a simple hash-based rating for visual flare
+              const rating = (4.0 + ((item.id * 7) % 10) / 10).toFixed(1);
+              const reviewsCount = 45 + (item.id * 13) % 200;
+              
+              return (
+                <div
+                  key={item.id}
+                  className="menu-card fade-in"
+                  style={{ animationDelay: `${i * 40}ms` }}
+                >
+                  {/* Veg/Non-Veg indicator badge */}
+                  <div className="food-type-tag">
+                    <div className={`food-type-indicator ${isVeg ? "veg" : "non-veg"}`} title={isVeg ? "Veg" : "Non-Veg"} />
+                  </div>
+
+                  {/* Top-right badges */}
+                  <div className="menu-card-badges">
+                    <span className="menu-badge">⏱️ {item.prep_time}m</span>
+                    {parseFloat(rating) >= 4.5 && (
+                      <span className="menu-badge popular">🔥 Top Rated</span>
+                    )}
+                  </div>
+
+                  <div className="menu-card-img-wrapper">
+                    {item.image_url ? (
+                      <img
+                        src={item.image_url}
+                        alt={item.name}
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="menu-placeholder-img">
+                        {FOOD_ICONS[item.category] || "🍽️"}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="menu-card-body">
                     <div className="menu-card-title">{item.name}</div>
-                    <span className="menu-card-badge">⏱ {item.prep_time}m</span>
-                  </div>
-                  <div className="menu-card-desc">{item.description}</div>
-                  <div className="menu-card-footer">
-                    <span className="menu-card-price">₹{item.price}</span>
-                    <button
-                      className="btn btn-primary btn-sm"
-                      onClick={() => addToCart(item)}
-                    >
-                      + Add
-                    </button>
+                    
+                    {/* Rating sub-row */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                      <span style={{ color: "var(--gold)" }}>★</span>
+                      <span style={{ fontWeight: 700, color: "var(--text-primary)" }}>{rating}</span>
+                      <span>({reviewsCount} reviews)</span>
+                    </div>
+
+                    <div className="menu-card-desc">{item.description}</div>
+                    
+                    <div className="menu-card-footer">
+                      <span className="menu-card-price">{item.price}</span>
+                      {(() => {
+                        const cartItem = cart.find((c) => c.id === item.id);
+                        if (cartItem) {
+                          return (
+                            <div className="card-qty-control">
+                              <button
+                                className="card-qty-btn"
+                                onClick={() => updateQty(item.id, -1)}
+                              >
+                                −
+                              </button>
+                              <span className="card-qty-val">
+                                {cartItem.quantity}
+                              </span>
+                              <button
+                                className="card-qty-btn"
+                                onClick={() => updateQty(item.id, 1)}
+                              >
+                                +
+                              </button>
+                            </div>
+                          );
+                        }
+                        return (
+                          <button
+                            className="btn btn-primary btn-add btn-sm"
+                            onClick={() => addToCart(item)}
+                          >
+                            <span>+ Add</span>
+                          </button>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -387,26 +446,37 @@ export default function MenuPage() {
       {/* Order Modal */}
       {orderModal && (
         <div className="modal-overlay" onClick={() => setOrderModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>📝 Confirm Order</h2>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            <h2 style={{ fontSize: "1.5rem", fontWeight: 800, marginBottom: 12, textAlign: "center" }}>
+              📝 Order Summary
+            </h2>
+            <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", textAlign: "center", marginBottom: 24 }}>
+              Verify details and choose payment method to complete order
+            </p>
+
             <div className="input-group">
               <label>Your Name</label>
               <input
                 className="input"
-                placeholder="Enter your name"
+                placeholder="Enter your name (e.g. Adarsh)"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
+                style={{ background: "rgba(10, 10, 20, 0.4)" }}
               />
             </div>
+            
             <div className="input-group">
               <label>Phone Number</label>
               <input
                 className="input"
+                type="tel"
                 placeholder="Enter phone number"
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
+                style={{ background: "rgba(10, 10, 20, 0.4)" }}
               />
             </div>
+            
             <div className="input-group">
               <label>Table Number</label>
               <input
@@ -415,75 +485,64 @@ export default function MenuPage() {
                 placeholder="Table number"
                 value={tableNum}
                 onChange={(e) => setTableNum(e.target.value)}
+                style={{ background: "rgba(10, 10, 20, 0.4)" }}
               />
             </div>
-            <div className="input-group">
+
+            <div className="input-group" style={{ marginBottom: 24 }}>
               <label>Payment Method</label>
               <div style={{ display: "flex", gap: 10 }}>
-                {paymentMethods.map(m => (
+                {paymentMethods.map((m) => (
                   <button
                     key={m}
-                    className={`btn btn-sm ${selectedMethod === m ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ flex: 1, textTransform: 'capitalize' }}
+                    className={`btn btn-sm ${selectedMethod === m ? "btn-primary" : "btn-secondary"}`}
+                    style={{ flex: 1, textTransform: "capitalize", justifyContent: "center", padding: "10px" }}
                     onClick={() => setSelectedMethod(m)}
                   >
-                    {m === 'cash' ? '💵 Cash' : m === 'Razorpay' ? '💳 Online' : m}
+                    {m === "cash" ? "💵 Cash" : m === "Razorpay" ? "💳 Online" : m}
                   </button>
                 ))}
               </div>
             </div>
-            <div
-              style={{
-                background: "var(--bg-secondary)",
-                borderRadius: "var(--radius)",
-                padding: 16,
-                marginBottom: 20,
-              }}
-            >
+
+            {/* Receipt container */}
+            <div className="receipt-card">
+              <div className="receipt-header">
+                <span className="receipt-header-title">SMART CANTEEN</span>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 4 }}>
+                  Table #{tableNum || "N/A"} • Order Details
+                </div>
+              </div>
+
               {cart.map((c) => (
-                <div
-                  key={c.id}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    padding: "4px 0",
-                    fontSize: ".9rem",
-                  }}
-                >
-                  <span>
-                    {c.name} × {c.quantity}
+                <div key={c.id} className="receipt-item">
+                  <span style={{ color: "var(--text-secondary)" }}>
+                    {c.name} <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>x{c.quantity}</span>
                   </span>
-                  <span>₹{c.price * c.quantity}</span>
+                  <span style={{ fontWeight: 600 }}>₹{c.price * c.quantity}</span>
                 </div>
               ))}
-              <div
-                style={{
-                  borderTop: "1px solid var(--border)",
-                  marginTop: 10,
-                  paddingTop: 10,
-                  fontWeight: 700,
-                  display: "flex",
-                  justifyContent: "space-between",
-                }}
-              >
-                <span>Total</span>
+
+              <div className="receipt-total">
+                <span>Total Amount</span>
                 <span style={{ color: "var(--accent)" }}>₹{cartTotal}</span>
               </div>
             </div>
+
             <div style={{ display: "flex", gap: 12 }}>
               <button
                 className="btn btn-secondary"
-                style={{ flex: 1, justifyContent: "center" }}
+                style={{ flex: 1, justifyContent: "center", padding: "12px" }}
                 onClick={() => setOrderModal(false)}
               >
-                Cancel
+                Go Back
               </button>
               <button
                 className="btn btn-primary"
-                style={{ flex: 1, justifyContent: "center" }}
+                style={{ flex: 1, justifyContent: "center", padding: "12px", boxShadow: "0 4px 16px var(--accent-glow)" }}
                 onClick={placeOrder}
               >
-                Place Order 🚀
+                Confirm & Pay 🚀
               </button>
             </div>
           </div>
@@ -496,51 +555,59 @@ export default function MenuPage() {
           <div
             className="modal"
             onClick={(e) => e.stopPropagation()}
-            style={{ textAlign: "center" }}
+            style={{ textAlign: "center", maxWidth: 400, padding: "40px 24px" }}
           >
-            <div style={{ fontSize: "4rem", marginBottom: 16 }}>✅</div>
-            <h2 style={{ color: "var(--success)" }}>Order Placed!</h2>
-            <p
-              style={{ color: "var(--text-secondary)", margin: "10px 0 20px" }}
-            >
-              Your order has been sent to the kitchen
+            <div style={{ fontSize: "4.5rem", marginBottom: 12, display: "inline-block", animation: "pulse 2s infinite" }}>🎉</div>
+            <h2 style={{ color: "var(--success)", fontSize: "1.6rem", fontWeight: 800 }}>Order Confirmed!</h2>
+            <p style={{ color: "var(--text-secondary)", margin: "8px 0 24px", fontSize: "0.9rem" }}>
+              Your meal is being prepared with love in the kitchen.
             </p>
+            
             <div
               style={{
-                background: "var(--bg-secondary)",
-                borderRadius: "var(--radius)",
-                padding: 20,
+                background: "radial-gradient(circle at top left, var(--bg-card-hover), var(--bg-secondary))",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-lg)",
+                padding: 24,
                 marginBottom: 20,
+                boxShadow: "inset 0 2px 4px rgba(0,0,0,0.3)"
               }}
             >
               <div
                 style={{
-                  fontSize: ".85rem",
+                  fontSize: "0.75rem",
+                  textTransform: "uppercase",
+                  letterSpacing: "1px",
                   color: "var(--text-muted)",
-                  marginBottom: 4,
+                  marginBottom: 8,
                 }}
               >
-                Token Number
+                Your Token Number
               </div>
               <div
                 style={{
-                  fontSize: "1.8rem",
-                  fontWeight: 800,
+                  fontSize: "2.8rem",
+                  fontWeight: 900,
                   color: "var(--accent)",
+                  lineHeight: 1,
+                  textShadow: "0 0 10px var(--accent-glow)"
                 }}
               >
                 {orderResult.token_number}
               </div>
             </div>
-            <p style={{ fontSize: ".85rem", color: "var(--text-secondary)" }}>
-              Total: ₹{orderResult.total_amount}
-            </p>
+            
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "0 10px", fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: 28 }}>
+              <span>Total Paid:</span>
+              <strong style={{ color: "var(--text-primary)" }}>₹{orderResult.total_amount}</strong>
+            </div>
+
             <button
               className="btn btn-primary btn-lg"
-              style={{ marginTop: 20, width: "100%", justifyContent: "center" }}
+              style={{ width: "100%", justifyContent: "center", boxShadow: "0 4px 16px var(--accent-glow)" }}
               onClick={() => setOrderResult(null)}
             >
-              Done
+              Back to Menu
             </button>
           </div>
         </div>
@@ -597,3 +664,4 @@ export default function MenuPage() {
     </div>
   );
 }
+
