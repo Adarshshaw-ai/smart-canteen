@@ -46,6 +46,8 @@ export default function MenuPage() {
   const [paymentMethods, setPaymentMethods] = useState(["cash"]);
   const [selectedMethod, setSelectedMethod] = useState("cash");
   const socket = useSocket();
+  const [trackedOrder, setTrackedOrder] = useState(null);
+  const [trackOpen, setTrackOpen] = useState(false);
 
   useEffect(() => {
     if (!socket) return;
@@ -86,6 +88,39 @@ export default function MenuPage() {
       .then((r) => r.json())
       .then((d) => setPaymentMethods(["cash", ...d]));
   }, []);
+
+  // Load tracked order from session storage on mount
+  useEffect(() => {
+    const token = sessionStorage.getItem("last_order_token");
+    if (token) {
+      fetch(`/api/orders/token/${token}`)
+        .then((r) => {
+          if (r.ok) return r.json();
+          throw new Error("Not found");
+        })
+        .then((d) => setTrackedOrder(d))
+        .catch(() => sessionStorage.removeItem("last_order_token"));
+    }
+  }, []);
+
+  // Listen to live updates for the tracked order
+  useEffect(() => {
+    if (!socket || !trackedOrder) return;
+    const handleUpdate = (updatedOrder) => {
+      if (updatedOrder.id === trackedOrder.id) {
+        setTrackedOrder(updatedOrder);
+        if (updatedOrder.status === "ready") {
+          toast("🔔 Your order is ready for pickup!", { icon: "✅", duration: 6000 });
+        } else if (updatedOrder.status === "completed") {
+          toast.success("Hope you enjoyed your meal! Order picked up.");
+        } else if (updatedOrder.status === "cancelled") {
+          toast.error("Your order has been cancelled.");
+        }
+      }
+    };
+    socket.on("order-updated", handleUpdate);
+    return () => socket.off("order-updated", handleUpdate);
+  }, [socket, trackedOrder]);
 
   const filtered = menu.filter(
     (i) =>
@@ -142,6 +177,8 @@ export default function MenuPage() {
         await handleRazorpayPayment(data);
       } else {
         setOrderResult(data);
+        sessionStorage.setItem("last_order_token", data.token_number);
+        setTrackedOrder(data);
         setCart([]);
         setCartOpen(false);
         setOrderModal(false);
@@ -183,6 +220,8 @@ export default function MenuPage() {
           const verifyData = await verifyRes.json();
           if (verifyData.status === "ok") {
             setOrderResult(order);
+            sessionStorage.setItem("last_order_token", order.token_number);
+            setTrackedOrder(order);
             setPendingOrder(null);
             setCart([]);
             setCartOpen(false);
@@ -660,6 +699,105 @@ export default function MenuPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Active Order Tracker (Session Storage) */}
+      {trackedOrder && (
+        <>
+          {/* Floating Tracker Bar */}
+          <div className="tracker-bar" onClick={() => setTrackOpen(true)}>
+            <div className="tracker-dot" />
+            <div>
+              <div className="tracker-title">Track Last Order ({trackedOrder.token_number.split('-').pop()})</div>
+              <div className="tracker-status">
+                Status: <strong style={{ color: 'var(--accent)', textTransform: 'capitalize' }}>{trackedOrder.status}</strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Detailed Tracker Modal */}
+          {trackOpen && (
+            <div className="modal-overlay" onClick={() => setTrackOpen(false)}>
+              <div className="modal tracker-modal" onClick={(e) => e.stopPropagation()}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 20 }}>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>📦 Track Order</h2>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      Token: <strong style={{ color: 'var(--accent)' }}>{trackedOrder.token_number}</strong>
+                      {trackedOrder.table_number ? ` • Table ${trackedOrder.table_number}` : ' • Takeaway'}
+                    </span>
+                  </div>
+                  <button className="btn btn-sm btn-secondary" onClick={() => setTrackOpen(false)}>✕</button>
+                </div>
+
+                {/* Live status notices */}
+                {trackedOrder.status === 'cancelled' && (
+                  <div style={{ background: 'rgba(255, 61, 0, 0.1)', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: 'var(--radius)', padding: 12, marginBottom: 20, fontSize: '0.85rem', textAlign: 'center' }}>
+                    ⚠️ This order was cancelled. Please contact the counter.
+                  </div>
+                )}
+                {trackedOrder.status === 'completed' && (
+                  <div style={{ background: 'rgba(0, 200, 83, 0.1)', border: '1px solid var(--success)', color: 'var(--success)', borderRadius: 'var(--radius)', padding: 12, marginBottom: 20, fontSize: '0.85rem', textAlign: 'center' }}>
+                    🎉 Order picked up. Thank you for dining with us!
+                  </div>
+                )}
+
+                {/* Status Timeline */}
+                {!['cancelled'].includes(trackedOrder.status) && (
+                  <div className="tracker-steps">
+                    {/* Step 1: Placed */}
+                    <div className={`tracker-step ${['pending', 'cooking', 'ready', 'completed'].includes(trackedOrder.status) ? 'completed' : ''}`}>
+                      <div className="tracker-step-icon">📝</div>
+                      <div className="tracker-step-label">Placed</div>
+                    </div>
+                    {/* Step 2: Preparing */}
+                    <div className={`tracker-step ${trackedOrder.status === 'cooking' ? 'active' : ['ready', 'completed'].includes(trackedOrder.status) ? 'completed' : ''}`}>
+                      <div className="tracker-step-icon">🔥</div>
+                      <div className="tracker-step-label">Preparing</div>
+                    </div>
+                    {/* Step 3: Ready */}
+                    <div className={`tracker-step ${trackedOrder.status === 'ready' ? 'active' : trackedOrder.status === 'completed' ? 'completed' : ''}`}>
+                      <div className="tracker-step-icon">✅</div>
+                      <div className="tracker-step-label">Ready</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Items Summary */}
+                <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', padding: 16, marginBottom: 20 }}>
+                  <h4 style={{ margin: '0 0 10px 0', fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Items Ordered</h4>
+                  {trackedOrder.items?.map((item, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '.9rem' }}>
+                      <span>{item.item_name} × {item.quantity}</span>
+                      <span>₹{item.price * item.quantity}</span>
+                    </div>
+                  ))}
+                  <div style={{ borderTop: '1px solid var(--border)', marginTop: 10, paddingTop: 10, fontWeight: 700, display: 'flex', justifyContent: 'space-between', fontSize: '1.05rem' }}>
+                    <span>Total Paid</span>
+                    <span style={{ color: 'var(--accent)' }}>₹{trackedOrder.total_amount}</span>
+                  </div>
+                </div>
+
+                {/* Footer Actions */}
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setTrackOpen(false)}>
+                    Close
+                  </button>
+                  {['completed', 'cancelled'].includes(trackedOrder.status) && (
+                    <button className="btn btn-danger" style={{ flex: 1, justifyContent: 'center' }} onClick={() => {
+                      sessionStorage.removeItem("last_order_token");
+                      setTrackedOrder(null);
+                      setTrackOpen(false);
+                      toast.success("Order history cleared");
+                    }}>
+                      Clear Tracker
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

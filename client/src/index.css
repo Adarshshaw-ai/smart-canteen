@@ -666,3 +666,112 @@ select.input { appearance:none; background-image:url("data:image/svg+xml,%3Csvg 
   .grid-2,.grid-3,.grid-4 { grid-template-columns:1fr; }
   .login-box { margin:16px; padding:28px; }
 }
+
+/* Order Tracker Widget */
+.tracker-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  right: auto;
+  z-index: 250;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 40px;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition: var(--transition);
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.tracker-bar:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 107, 53, 0.4);
+  box-shadow: 0 12px 40px rgba(255, 107, 53, 0.15);
+}
+.tracker-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  position: relative;
+}
+.tracker-dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  animation: pulse 1.5s infinite;
+}
+.tracker-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.tracker-status {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+/* Detailed Tracker Modal/Panel */
+.tracker-modal {
+  max-width: 440px;
+}
+.tracker-steps {
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  margin: 32px 0 24px;
+}
+.tracker-steps::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: var(--border);
+  z-index: 1;
+}
+.tracker-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 2;
+  position: relative;
+  flex: 1;
+}
+.tracker-step-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  transition: var(--transition);
+}
+.tracker-step.active .tracker-step-icon {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+.tracker-step.completed .tracker-step-icon {
+  background: var(--success);
+  border-color: var(--success);
+}
+.tracker-step-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: center;
+}
+.tracker-step.active .tracker-step-label,
+.tracker-step.completed .tracker-step-label {
+  color: var(--text-primary);
+}
